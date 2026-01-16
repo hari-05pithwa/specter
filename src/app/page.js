@@ -783,12 +783,10 @@
 
 
 
-
-
 "use client";
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ShieldCheck, Send, Paperclip, Fingerprint, Menu, X, Lock, Cpu, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Send, Paperclip, Fingerprint, Menu, X, Lock, CheckCircle2, ShieldAlert, AlertTriangle } from 'lucide-react';
 import { useSpecterStore } from '../hooks/useSpecterStore';
 import WebRTCManager from '../lib/WebRTCManager';
 import { encryptData, decryptData, generateSharedKey, exportKey, importKey, encryptFile, decryptFile } from '../lib/crypto';
@@ -805,6 +803,7 @@ export default function SpecterTerminal() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showError, setShowError] = useState(false); // NEW Error state
 
   const myIdRef = useRef(nanoid(6).toUpperCase());
   const rtc = useRef(null);
@@ -818,7 +817,7 @@ export default function SpecterTerminal() {
           setStatus(s);
           if (s === 'CONNECTED') {
             setShowSuccess(true);
-            setTimeout(() => setShowSuccess(false), 1200); 
+            setTimeout(() => setShowSuccess(false), 1800); 
           }
           if (s === 'IDLE' || s === 'DISCONNECTED') setIsConnecting(false);
         },
@@ -848,14 +847,29 @@ export default function SpecterTerminal() {
 
   const handleConnect = async () => {
     if (!targetId || status === 'CONNECTED' || isConnecting) return;
+    
     setIsConnecting(true);
+    addLog(`SYSTEM: Initiating Handshake with ${targetId}...`);
+
     const key = await generateSharedKey();
     const jwk = await exportKey(key);
     setSharedKey(key);
+    
     rtc.current.connectToPeer(targetId.toUpperCase());
     
+    // ERROR DETECTION: If not connected within 5 seconds, show error animation
+    const timeout = setTimeout(() => {
+        if (useSpecterStore.getState().status !== 'CONNECTED') {
+            setIsConnecting(false);
+            setShowError(true);
+            addLog("ERROR: Handshake Rejected or Node Offline.");
+            setTimeout(() => setShowError(false), 1700);
+        }
+    }, 5000);
+
     const sync = setInterval(() => {
       if (useSpecterStore.getState().status === 'CONNECTED') {
+        clearTimeout(timeout);
         rtc.current.send({ type: 'KEY_SYNC', jwk });
         clearInterval(sync);
         setIsConnecting(false);
@@ -888,12 +902,11 @@ export default function SpecterTerminal() {
 
   return (
     <main className="h-screen w-full flex items-center justify-center p-0 md:p-6 lg:p-8 bg-[#030712] overflow-hidden relative">
-      
-      {/* INFINITE BACKGROUND PARTICLES - Low Density & Subtle */}
       <ParticleBackground />
 
       <AnimatePresence>
         {showSuccess && <HandshakeOverlay />}
+        {showError && <ErrorOverlay />} {/* NEW Error Overlay */}
       </AnimatePresence>
 
       <motion.div 
@@ -976,42 +989,56 @@ export default function SpecterTerminal() {
   );
 }
 
+// Success Handshake Overlay
 function HandshakeOverlay() {
   return (
     <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
       className="fixed inset-0 z-[100] bg-[#030712]/40 backdrop-blur-xl flex flex-col items-center justify-center pointer-events-none p-4"
     >
       <motion.div 
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
+        initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
         transition={{ type: "spring", damping: 15, stiffness: 200 }}
         className="relative z-10 flex flex-col items-center gap-4 md:gap-6"
       >
         <div className="p-4 md:p-6 bg-indigo-500/20 rounded-full border border-indigo-400/50 shadow-[0_0_50px_rgba(99,102,241,0.3)]">
           <CheckCircle2 className="w-10 h-10 md:w-16 md:h-16 text-emerald-400" />
         </div>
-        
         <div className="text-center px-4">
-          <h2 className="text-lg md:text-2xl font-black uppercase tracking-[0.2em] md:tracking-[0.4em] text-white">
-            Bridge_Established
-          </h2>
-          <p className="text-indigo-400 text-[8px] md:text-[10px] font-bold tracking-[0.1em] md:tracking-[0.2em] mt-2 uppercase">
-            Zero-Knowledge Key Sync Complete
-          </p>
+          <h2 className="text-lg md:text-2xl font-black uppercase tracking-[0.2em] md:tracking-[0.4em] text-white">Bridge_Established</h2>
+          <p className="text-indigo-400 text-[8px] md:text-[10px] font-bold tracking-[0.1em] md:tracking-[0.2em] mt-2 uppercase">Zero-Knowledge Key Sync Complete</p>
         </div>
       </motion.div>
     </motion.div>
   );
 }
 
-/**
- * Persistant Ambient Particle Background
- * Optimized for low battery drain and subtle UI
- */
+// NEW Error Handshake Overlay
+function ErrorOverlay() {
+    return (
+      <motion.div 
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+        className="fixed inset-0 z-[100] bg-rose-950/20 backdrop-blur-xl flex flex-col items-center justify-center pointer-events-none p-4"
+      >
+        <motion.div 
+          initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", damping: 15, stiffness: 200 }}
+          className="relative z-10 flex flex-col items-center gap-4 md:gap-6"
+        >
+          <div className="p-4 md:p-6 bg-rose-500/20 rounded-full border border-rose-500/50 shadow-[0_0_50px_rgba(244,63,94,0.3)]">
+            <ShieldAlert className="w-10 h-10 md:w-16 md:h-16 text-rose-500" />
+          </div>
+          <div className="text-center px-4">
+            <h2 className="text-lg md:text-2xl font-black uppercase tracking-[0.2em] md:tracking-[0.4em] text-white text-rose-50">Handshake_Failed</h2>
+            <p className="text-rose-400 text-[8px] md:text-[10px] font-bold tracking-[0.1em] md:tracking-[0.2em] mt-2 uppercase">Node Offline or Identity Invalid</p>
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  }
+
 function ParticleBackground() {
   const canvasRef = useRef(null);
 
@@ -1031,7 +1058,6 @@ function ParticleBackground() {
       reset() {
         this.x = Math.random() * canvas.width;
         this.y = Math.random() * canvas.height;
-        // Very slow ambient movement
         this.vx = (Math.random() - 0.5) * 0.4;
         this.vy = (Math.random() - 0.5) * 0.4;
         this.size = Math.random() * (window.innerWidth < 768 ? 1.2 : 2.0);
@@ -1045,7 +1071,6 @@ function ParticleBackground() {
         if (this.y > canvas.height) this.y = 0;
       }
       draw() {
-        // Very low opacity fill for subtle background effect
         ctx.fillStyle = 'rgba(99, 102, 241, 0.15)';
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
@@ -1054,7 +1079,6 @@ function ParticleBackground() {
     }
 
     const init = () => { 
-      // Low particle count for "less is more" feel
       const count = window.innerWidth < 768 ? 20 : 45;
       particles = Array.from({ length: count }, () => new Particle()); 
     };
@@ -1065,14 +1089,8 @@ function ParticleBackground() {
       requestAnimationFrame(animate);
     };
 
-    window.addEventListener('resize', () => {
-      resize();
-      init();
-    });
-    
-    resize();
-    init();
-    animate();
+    window.addEventListener('resize', () => { resize(); init(); });
+    resize(); init(); animate();
     return () => window.removeEventListener('resize', resize);
   }, []);
 
