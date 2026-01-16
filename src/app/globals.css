@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+:root {
+  --background: #030712;
+  --foreground: #f8fafc;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
+body {
+  @apply bg-[#030712] text-slate-200 overflow-hidden;
+  /* Deep radial glow in the corner for modern depth */
+  background: radial-gradient(circle at top right, #1e1b4b, #030712);
+  font-family: var(--font-sans);
+}
+
+/* Frosted glass utility */
+.glass-panel {
+  @apply bg-white/5 backdrop-blur-2xl border border-white/10 shadow-2xl;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-indigo-500/30 rounded-full;
+}
+
+@layer base {
+  body {
+    @apply bg-[#030712] text-slate-200 overflow-hidden;
+    background: radial-gradient(circle at top right, #1e1b4b, #030712);
+  }
+}
+
+.glass-panel {
+  @apply bg-white/5 backdrop-blur-2xl border border-white/10 shadow-2xl;
+}
+
+/* Particle Canvas Container */
+.particle-container {
+  mask-image: radial-gradient(circle, white, transparent);
+}
