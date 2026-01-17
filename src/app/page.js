@@ -783,10 +783,327 @@
 
 
 
+// "use client";
+// import React, { useEffect, useRef, useState } from 'react';
+// import { AnimatePresence, motion } from 'framer-motion';
+// import { ShieldCheck, Send, Paperclip, Fingerprint, Menu, X, Lock, CheckCircle2, ShieldAlert, AlertTriangle } from 'lucide-react';
+// import { useSpecterStore } from '../hooks/useSpecterStore';
+// import WebRTCManager from '../lib/WebRTCManager';
+// import { encryptData, decryptData, generateSharedKey, exportKey, importKey, encryptFile, decryptFile } from '../lib/crypto';
+// import { nanoid } from 'nanoid';
+
+// import ChatBubble from '../components/ChatBubble';
+// import ConnectionPanel from '../components/ConnectionPanel';
+// import TerminalLog from '../components/TerminalLog';
+
+// export default function SpecterTerminal() {
+//   const { messages, logs, status, sharedKey, addMessage, addLog, setStatus, setSharedKey } = useSpecterStore();
+//   const [input, setInput] = useState("");
+//   const [targetId, setTargetId] = useState("");
+//   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+//   const [isConnecting, setIsConnecting] = useState(false);
+//   const [showSuccess, setShowSuccess] = useState(false);
+//   const [showError, setShowError] = useState(false); // NEW Error state
+
+//   const myIdRef = useRef(nanoid(6).toUpperCase());
+//   const rtc = useRef(null);
+//   const fileInputRef = useRef(null);
+
+//   useEffect(() => {
+//     if (!rtc.current) {
+//       rtc.current = new WebRTCManager({
+//         onLog: (msg) => addLog(msg),
+//         onStatusChange: (s) => {
+//           setStatus(s);
+//           if (s === 'CONNECTED') {
+//             setShowSuccess(true);
+//             setTimeout(() => setShowSuccess(false), 1800); 
+//           }
+//           if (s === 'IDLE' || s === 'DISCONNECTED') setIsConnecting(false);
+//         },
+//         onMessage: async (data) => {
+//           const currentKey = useSpecterStore.getState().sharedKey;
+//           if (data.type === 'KEY_SYNC') {
+//             const key = await importKey(data.jwk);
+//             setSharedKey(key);
+//             addLog("SEC_LAYER: Symmetric Key Synchronized.");
+//             return;
+//           }
+//           if (data.type === 'FILE_TRANSFER') {
+//             const decrypted = await decryptFile(data.fileData, data.iv, currentKey);
+//             const url = URL.createObjectURL(new Blob([decrypted], { type: data.fileType }));
+//             addMessage({ text: `Encrypted File: ${data.fileName}`, fileUrl: url, fileName: data.fileName, sender: 'peer', timestamp: Date.now() });
+//             return;
+//           }
+//           try {
+//             const decrypted = await decryptData(data, currentKey);
+//             addMessage({ text: decrypted, sender: 'peer', timestamp: Date.now() });
+//           } catch (e) { addLog("SEC_ERROR: Decryption Integrity Failure."); }
+//         }
+//       });
+//       rtc.current.init(myIdRef.current);
+//     }
+//   }, [addLog, setStatus, setSharedKey, addMessage]);
+
+//   const handleConnect = async () => {
+//     if (!targetId || status === 'CONNECTED' || isConnecting) return;
+    
+//     setIsConnecting(true);
+//     addLog(`SYSTEM: Initiating Handshake with ${targetId}...`);
+
+//     const key = await generateSharedKey();
+//     const jwk = await exportKey(key);
+//     setSharedKey(key);
+    
+//     rtc.current.connectToPeer(targetId.toUpperCase());
+    
+//     // ERROR DETECTION: If not connected within 5 seconds, show error animation
+//     const timeout = setTimeout(() => {
+//         if (useSpecterStore.getState().status !== 'CONNECTED') {
+//             setIsConnecting(false);
+//             setShowError(true);
+//             addLog("ERROR: Handshake Rejected or Node Offline.");
+//             setTimeout(() => setShowError(false), 1700);
+//         }
+//     }, 5000);
+
+//     const sync = setInterval(() => {
+//       if (useSpecterStore.getState().status === 'CONNECTED') {
+//         clearTimeout(timeout);
+//         rtc.current.send({ type: 'KEY_SYNC', jwk });
+//         clearInterval(sync);
+//         setIsConnecting(false);
+//       }
+//     }, 500);
+//   };
+
+//   const handleSendMessage = async (e) => {
+//     e.preventDefault();
+//     if (!input || status !== 'CONNECTED') return;
+//     const text = input;
+//     setInput(""); 
+//     const encrypted = await encryptData(text, sharedKey);
+//     rtc.current.send(encrypted);
+//     addMessage({ text, sender: 'me', timestamp: Date.now() });
+//   };
+
+//   const handleFileDrop = async (e) => {
+//     const file = e.target.files[0];
+//     if (!file || status !== 'CONNECTED') return;
+//     addLog(`FILE: Encrypting ${file.name}...`);
+//     const reader = new FileReader();
+//     reader.onload = async (ev) => {
+//       const { encryptedBuffer, iv } = await encryptFile(ev.target.result, sharedKey);
+//       rtc.current.send({ type: 'FILE_TRANSFER', fileData: encryptedBuffer, iv, fileName: file.name, fileType: file.type });
+//       addMessage({ text: `Sent: ${file.name}`, sender: 'me', timestamp: Date.now() });
+//     };
+//     reader.readAsArrayBuffer(file);
+//   };
+
+//   return (
+//     <main className="h-screen w-full flex items-center justify-center p-0 md:p-6 lg:p-8 bg-[#030712] overflow-hidden relative">
+//       <ParticleBackground />
+
+//       <AnimatePresence>
+//         {showSuccess && <HandshakeOverlay />}
+//         {showError && <ErrorOverlay />} {/* NEW Error Overlay */}
+//       </AnimatePresence>
+
+//       <motion.div 
+//         initial={{ opacity: 0, scale: 0.98 }}
+//         animate={{ opacity: 1, scale: 1 }}
+//         className="w-full h-full max-w-6xl glass-panel rounded-none md:rounded-3xl flex flex-col overflow-hidden relative shadow-2xl z-10"
+//       >
+//         <header className="px-4 py-4 md:px-6 border-b border-white/10 flex justify-between items-center bg-white/5 backdrop-blur-md z-50">
+//           <div className="flex items-center gap-2 md:gap-3">
+//             <div className="p-2 bg-indigo-500/20 rounded-xl">
+//               <ShieldCheck className="w-5 h-5 md:w-6 md:h-6 text-indigo-400" />
+//             </div>
+//             <div className="hidden xs:block">
+//               <h1 className="text-md md:text-lg font-bold tracking-tight text-white leading-none">Specter</h1>
+//               <span className="text-[9px] md:text-[10px] text-indigo-300/60 uppercase tracking-widest font-black">Secure P2P Node</span>
+//             </div>
+//           </div>
+
+//           <div className="flex items-center gap-2 md:gap-4">
+//              <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 rounded-xl border border-indigo-500/20 text-indigo-100">
+//                 <Fingerprint className="w-4 h-4 text-indigo-400 hidden sm:block" />
+//                 <span className="text-[11px] md:text-xs font-mono font-bold tracking-wider">{myIdRef.current}</span>
+//              </div>
+
+//             <div className="flex items-center gap-2 px-3 py-1.5 bg-black/40 rounded-full border border-white/5">
+//               <span className={`w-2 h-2 rounded-full ${status === 'CONNECTED' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
+//               <span className="text-[9px] md:text-[10px] font-black uppercase tracking-wider text-slate-300 hidden sm:inline">{status}</span>
+//             </div>
+            
+//             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-white/10 rounded-lg text-white">
+//               {isSidebarOpen ? <X size={20}/> : <Menu size={20}/>}
+//             </button>
+//           </div>
+//         </header>
+
+//         <div className="flex-grow flex overflow-hidden">
+//           <aside className={`absolute md:relative z-40 h-full w-72 border-r border-white/10 bg-[#030712]/95 md:bg-transparent transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+//             <div className="p-6 flex flex-col h-full">
+//               <div className="flex-grow space-y-4 overflow-hidden">
+//                 <label className="text-[10px] text-slate-500 uppercase font-black tracking-widest opacity-50">Security Feed</label>
+//                 <TerminalLog logs={logs} />
+//               </div>
+//             </div>
+//           </aside>
+
+//           <div className="flex-grow flex flex-col bg-black/20 relative min-w-0">
+//             {status !== 'CONNECTED' && (
+//               <ConnectionPanel targetId={targetId} setTargetId={setTargetId} onConnect={handleConnect} disabled={isConnecting} />
+//             )}
+//             <div className="flex-grow overflow-y-auto p-4 md:p-8 space-y-6 custom-scrollbar">
+//               <AnimatePresence mode="popLayout">
+//                 {messages.length === 0 && status === 'CONNECTED' && (
+//                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center h-full opacity-20 gap-3 text-white">
+//                     <Lock size={40} />
+//                     <span className="text-xs uppercase tracking-[0.3em]">Encrypted Bridge Active</span>
+//                   </motion.div>
+//                 )}
+//                 {messages.map((msg) => <ChatBubble key={msg.timestamp} msg={msg} />)}
+//               </AnimatePresence>
+//             </div>
+
+//             <form onSubmit={handleSendMessage} className="p-4 md:p-6 bg-white/5 border-t border-white/10">
+//               <div className="max-w-4xl mx-auto flex gap-3 items-center">
+//                 <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileDrop} />
+//                 <button type="button" onClick={() => fileInputRef.current.click()} className="p-3 text-slate-400 hover:text-indigo-400 rounded-xl" disabled={status !== 'CONNECTED'}><Paperclip size={22} /></button>
+//                 <input 
+//                   className="flex-grow bg-black/40 border border-white/10 rounded-xl px-5 py-4 outline-none focus:border-indigo-500/50 text-white text-sm" 
+//                   placeholder={status === 'CONNECTED' ? "Write a secure message..." : "Awaiting P2P bridge..."} 
+//                   value={input} onChange={(e) => setInput(e.target.value)} disabled={status !== 'CONNECTED'} 
+//                 />
+//                 <button type="submit" disabled={status !== 'CONNECTED' || !input} className="p-4 bg-indigo-600 text-white rounded-xl shadow-indigo-500/20 shadow-lg transition-all">
+//                   <Send size={20} />
+//                 </button>
+//               </div>
+//             </form>
+//           </div>
+//         </div>
+//       </motion.div>
+//     </main>
+//   );
+// }
+
+// // Success Handshake Overlay
+// function HandshakeOverlay() {
+//   return (
+//     <motion.div 
+//       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+//       transition={{ duration: 0.3 }}
+//       className="fixed inset-0 z-[100] bg-[#030712]/40 backdrop-blur-xl flex flex-col items-center justify-center pointer-events-none p-4"
+//     >
+//       <motion.div 
+//         initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+//         transition={{ type: "spring", damping: 15, stiffness: 200 }}
+//         className="relative z-10 flex flex-col items-center gap-4 md:gap-6"
+//       >
+//         <div className="p-4 md:p-6 bg-indigo-500/20 rounded-full border border-indigo-400/50 shadow-[0_0_50px_rgba(99,102,241,0.3)]">
+//           <CheckCircle2 className="w-10 h-10 md:w-16 md:h-16 text-emerald-400" />
+//         </div>
+//         <div className="text-center px-4">
+//           <h2 className="text-lg md:text-2xl font-black uppercase tracking-[0.2em] md:tracking-[0.4em] text-white">Bridge_Established</h2>
+//           <p className="text-indigo-400 text-[8px] md:text-[10px] font-bold tracking-[0.1em] md:tracking-[0.2em] mt-2 uppercase">Zero-Knowledge Key Sync Complete</p>
+//         </div>
+//       </motion.div>
+//     </motion.div>
+//   );
+// }
+
+// // NEW Error Handshake Overlay
+// function ErrorOverlay() {
+//     return (
+//       <motion.div 
+//         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+//         transition={{ duration: 0.3 }}
+//         className="fixed inset-0 z-[100] bg-rose-950/20 backdrop-blur-xl flex flex-col items-center justify-center pointer-events-none p-4"
+//       >
+//         <motion.div 
+//           initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+//           transition={{ type: "spring", damping: 15, stiffness: 200 }}
+//           className="relative z-10 flex flex-col items-center gap-4 md:gap-6"
+//         >
+//           <div className="p-4 md:p-6 bg-rose-500/20 rounded-full border border-rose-500/50 shadow-[0_0_50px_rgba(244,63,94,0.3)]">
+//             <ShieldAlert className="w-10 h-10 md:w-16 md:h-16 text-rose-500" />
+//           </div>
+//           <div className="text-center px-4">
+//             <h2 className="text-lg md:text-2xl font-black uppercase tracking-[0.2em] md:tracking-[0.4em] text-white text-rose-50">Handshake_Failed</h2>
+//             <p className="text-rose-400 text-[8px] md:text-[10px] font-bold tracking-[0.1em] md:tracking-[0.2em] mt-2 uppercase">Node Offline or Identity Invalid</p>
+//           </div>
+//         </motion.div>
+//       </motion.div>
+//     );
+//   }
+
+// function ParticleBackground() {
+//   const canvasRef = useRef(null);
+
+//   useEffect(() => {
+//     const canvas = canvasRef.current;
+//     if (!canvas) return;
+//     const ctx = canvas.getContext('2d');
+//     let particles = [];
+    
+//     const resize = () => {
+//       canvas.width = window.innerWidth;
+//       canvas.height = window.innerHeight;
+//     };
+
+//     class Particle {
+//       constructor() { this.reset(); }
+//       reset() {
+//         this.x = Math.random() * canvas.width;
+//         this.y = Math.random() * canvas.height;
+//         this.vx = (Math.random() - 0.5) * 0.4;
+//         this.vy = (Math.random() - 0.5) * 0.4;
+//         this.size = Math.random() * (window.innerWidth < 768 ? 1.2 : 2.0);
+//       }
+//       update() {
+//         this.x += this.vx;
+//         this.y += this.vy;
+//         if (this.x < 0) this.x = canvas.width;
+//         if (this.x > canvas.width) this.x = 0;
+//         if (this.y < 0) this.y = canvas.height;
+//         if (this.y > canvas.height) this.y = 0;
+//       }
+//       draw() {
+//         ctx.fillStyle = 'rgba(99, 102, 241, 0.15)';
+//         ctx.beginPath();
+//         ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+//         ctx.fill();
+//       }
+//     }
+
+//     const init = () => { 
+//       const count = window.innerWidth < 768 ? 20 : 45;
+//       particles = Array.from({ length: count }, () => new Particle()); 
+//     };
+
+//     const animate = () => {
+//       ctx.clearRect(0, 0, canvas.width, canvas.height);
+//       particles.forEach(p => { p.update(); p.draw(); });
+//       requestAnimationFrame(animate);
+//     };
+
+//     window.addEventListener('resize', () => { resize(); init(); });
+//     resize(); init(); animate();
+//     return () => window.removeEventListener('resize', resize);
+//   }, []);
+
+//   return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none z-0" />;
+// }
+
+
+
+
 "use client";
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ShieldCheck, Send, Paperclip, Fingerprint, Menu, X, Lock, CheckCircle2, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, Send, Paperclip, Fingerprint, Menu, X, Lock, Cpu, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { useSpecterStore } from '../hooks/useSpecterStore';
 import WebRTCManager from '../lib/WebRTCManager';
 import { encryptData, decryptData, generateSharedKey, exportKey, importKey, encryptFile, decryptFile } from '../lib/crypto';
@@ -803,7 +1120,7 @@ export default function SpecterTerminal() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [showError, setShowError] = useState(false); // NEW Error state
+  const [showError, setShowError] = useState(false);
 
   const myIdRef = useRef(nanoid(6).toUpperCase());
   const rtc = useRef(null);
@@ -817,7 +1134,7 @@ export default function SpecterTerminal() {
           setStatus(s);
           if (s === 'CONNECTED') {
             setShowSuccess(true);
-            setTimeout(() => setShowSuccess(false), 1800); 
+            setTimeout(() => setShowSuccess(false), 1200); 
           }
           if (s === 'IDLE' || s === 'DISCONNECTED') setIsConnecting(false);
         },
@@ -838,7 +1155,7 @@ export default function SpecterTerminal() {
           try {
             const decrypted = await decryptData(data, currentKey);
             addMessage({ text: decrypted, sender: 'peer', timestamp: Date.now() });
-          } catch (e) { addLog("SEC_ERROR: Decryption Integrity Failure."); }
+          } catch (e) { addLog("SEC_ERROR: Integrity Failure."); }
         }
       });
       rtc.current.init(myIdRef.current);
@@ -847,25 +1164,19 @@ export default function SpecterTerminal() {
 
   const handleConnect = async () => {
     if (!targetId || status === 'CONNECTED' || isConnecting) return;
-    
     setIsConnecting(true);
-    addLog(`SYSTEM: Initiating Handshake with ${targetId}...`);
-
     const key = await generateSharedKey();
     const jwk = await exportKey(key);
     setSharedKey(key);
-    
     rtc.current.connectToPeer(targetId.toUpperCase());
     
-    // ERROR DETECTION: If not connected within 5 seconds, show error animation
     const timeout = setTimeout(() => {
-        if (useSpecterStore.getState().status !== 'CONNECTED') {
-            setIsConnecting(false);
-            setShowError(true);
-            addLog("ERROR: Handshake Rejected or Node Offline.");
-            setTimeout(() => setShowError(false), 1700);
-        }
-    }, 5000);
+      if (useSpecterStore.getState().status !== 'CONNECTED') {
+        setIsConnecting(false);
+        setShowError(true);
+        setTimeout(() => setShowError(false), 1500);
+      }
+    }, 8000);
 
     const sync = setInterval(() => {
       if (useSpecterStore.getState().status === 'CONNECTED') {
@@ -890,7 +1201,6 @@ export default function SpecterTerminal() {
   const handleFileDrop = async (e) => {
     const file = e.target.files[0];
     if (!file || status !== 'CONNECTED') return;
-    addLog(`FILE: Encrypting ${file.name}...`);
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const { encryptedBuffer, iv } = await encryptFile(ev.target.result, sharedKey);
@@ -901,84 +1211,93 @@ export default function SpecterTerminal() {
   };
 
   return (
-    <main className="h-screen w-full flex items-center justify-center p-0 md:p-6 lg:p-8 bg-[#030712] overflow-hidden relative">
+    <main className="h-screen w-full bg-[#030712] overflow-hidden relative flex flex-col items-center justify-center p-0 sm:p-4 md:p-8">
       <ParticleBackground />
 
       <AnimatePresence>
-        {showSuccess && <HandshakeOverlay />}
-        {showError && <ErrorOverlay />} {/* NEW Error Overlay */}
+        {showSuccess && <HandshakeOverlay type="success" />}
+        {showError && <HandshakeOverlay type="error" />}
       </AnimatePresence>
 
       <motion.div 
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="w-full h-full max-w-6xl glass-panel rounded-none md:rounded-3xl flex flex-col overflow-hidden relative shadow-2xl z-10"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full h-full max-w-6xl glass-panel rounded-none sm:rounded-3xl flex flex-col overflow-hidden relative shadow-2xl z-10"
       >
-        <header className="px-4 py-4 md:px-6 border-b border-white/10 flex justify-between items-center bg-white/5 backdrop-blur-md z-50">
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className="p-2 bg-indigo-500/20 rounded-xl">
-              <ShieldCheck className="w-5 h-5 md:w-6 md:h-6 text-indigo-400" />
+        {/* RESPONSIVE HEADER */}
+        <header className="w-full flex-none px-4 py-3 md:px-6 border-b border-white/10 flex justify-between items-center bg-white/5 backdrop-blur-md z-50">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-indigo-500/20 rounded-lg">
+              <ShieldCheck className="w-5 h-5 text-indigo-400" />
             </div>
             <div className="hidden xs:block">
-              <h1 className="text-md md:text-lg font-bold tracking-tight text-white leading-none">Specter</h1>
-              <span className="text-[9px] md:text-[10px] text-indigo-300/60 uppercase tracking-widest font-black">Secure P2P Node</span>
+              <h1 className="text-sm font-bold text-white tracking-tight leading-none uppercase">Specter</h1>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 md:gap-4">
-             <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 rounded-xl border border-indigo-500/20 text-indigo-100">
-                <Fingerprint className="w-4 h-4 text-indigo-400 hidden sm:block" />
-                <span className="text-[11px] md:text-xs font-mono font-bold tracking-wider">{myIdRef.current}</span>
+          {/* NODE ID DISPLAY (CRITICAL FOR MOBILE) */}
+          <div className="flex items-center gap-2 flex-1 justify-center sm:justify-end mr-2 sm:mr-4">
+             <div className="flex items-center gap-1.5 px-2 py-1 md:px-3 md:py-1.5 bg-indigo-500/10 rounded-lg border border-indigo-500/20 text-indigo-100 shadow-inner">
+                <Fingerprint className="w-3.5 h-3.5 text-indigo-400 hidden sm:block" />
+                <span className="text-[10px] md:text-xs font-mono font-bold tracking-widest">{myIdRef.current}</span>
              </div>
-
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-black/40 rounded-full border border-white/5">
-              <span className={`w-2 h-2 rounded-full ${status === 'CONNECTED' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
-              <span className="text-[9px] md:text-[10px] font-black uppercase tracking-wider text-slate-300 hidden sm:inline">{status}</span>
-            </div>
-            
-            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-white/10 rounded-lg text-white">
-              {isSidebarOpen ? <X size={20}/> : <Menu size={20}/>}
-            </button>
+             
+             <div className="flex items-center gap-1.5 px-2 py-1 md:px-3 md:py-1.5 bg-black/40 rounded-full border border-white/5">
+                <span className={`w-1.5 h-1.5 rounded-full ${status === 'CONNECTED' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
+                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-300 hidden md:inline">{status}</span>
+             </div>
           </div>
+          
+          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-white/10 rounded-lg text-white transition-colors">
+            {isSidebarOpen ? <X size={20}/> : <Menu size={20}/>}
+          </button>
         </header>
 
-        <div className="flex-grow flex overflow-hidden">
-          <aside className={`absolute md:relative z-40 h-full w-72 border-r border-white/10 bg-[#030712]/95 md:bg-transparent transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-            <div className="p-6 flex flex-col h-full">
-              <div className="flex-grow space-y-4 overflow-hidden">
-                <label className="text-[10px] text-slate-500 uppercase font-black tracking-widest opacity-50">Security Feed</label>
+        <div className="flex-grow flex overflow-hidden relative">
+          {/* SIDEBAR OVERLAY FOR MOBILE */}
+          <aside className={`
+            absolute md:relative z-40 h-full w-72 border-r border-white/10 bg-[#030712]/95 md:bg-transparent backdrop-blur-xl 
+            transition-transform duration-300 ease-in-out flex flex-col
+            ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+          `}>
+            <div className="p-6 flex flex-col h-full space-y-4">
+              <label className="text-[10px] text-slate-500 uppercase font-black tracking-widest opacity-50">Security Feed</label>
+              <div className="flex-grow overflow-hidden">
                 <TerminalLog logs={logs} />
               </div>
             </div>
           </aside>
 
+          {/* CHAT AREA */}
           <div className="flex-grow flex flex-col bg-black/20 relative min-w-0">
             {status !== 'CONNECTED' && (
               <ConnectionPanel targetId={targetId} setTargetId={setTargetId} onConnect={handleConnect} disabled={isConnecting} />
             )}
+            
             <div className="flex-grow overflow-y-auto p-4 md:p-8 space-y-6 custom-scrollbar">
               <AnimatePresence mode="popLayout">
                 {messages.length === 0 && status === 'CONNECTED' && (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center h-full opacity-20 gap-3 text-white">
                     <Lock size={40} />
-                    <span className="text-xs uppercase tracking-[0.3em]">Encrypted Bridge Active</span>
+                    <span className="text-xs uppercase tracking-[0.2em]">Encrypted Tunnel Established</span>
                   </motion.div>
                 )}
                 {messages.map((msg) => <ChatBubble key={msg.timestamp} msg={msg} />)}
               </AnimatePresence>
             </div>
 
-            <form onSubmit={handleSendMessage} className="p-4 md:p-6 bg-white/5 border-t border-white/10">
-              <div className="max-w-4xl mx-auto flex gap-3 items-center">
+            {/* INPUT BAR */}
+            <form onSubmit={handleSendMessage} className="p-3 md:p-6 bg-white/5 border-t border-white/10 flex-none backdrop-blur-md">
+              <div className="max-w-4xl mx-auto flex gap-2 md:gap-3 items-center">
                 <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileDrop} />
-                <button type="button" onClick={() => fileInputRef.current.click()} className="p-3 text-slate-400 hover:text-indigo-400 rounded-xl" disabled={status !== 'CONNECTED'}><Paperclip size={22} /></button>
+                <button type="button" onClick={() => fileInputRef.current.click()} className="p-2 md:p-3 text-slate-400 hover:text-indigo-400 transition-colors" disabled={status !== 'CONNECTED'}><Paperclip size={20} /></button>
                 <input 
-                  className="flex-grow bg-black/40 border border-white/10 rounded-xl px-5 py-4 outline-none focus:border-indigo-500/50 text-white text-sm" 
-                  placeholder={status === 'CONNECTED' ? "Write a secure message..." : "Awaiting P2P bridge..."} 
+                  className="flex-grow bg-black/40 border border-white/10 rounded-xl px-4 py-3 md:px-5 md:py-4 outline-none focus:border-indigo-500/50 text-white text-sm" 
+                  placeholder={status === 'CONNECTED' ? "Type message..." : "Waiting..."} 
                   value={input} onChange={(e) => setInput(e.target.value)} disabled={status !== 'CONNECTED'} 
                 />
-                <button type="submit" disabled={status !== 'CONNECTED' || !input} className="p-4 bg-indigo-600 text-white rounded-xl shadow-indigo-500/20 shadow-lg transition-all">
-                  <Send size={20} />
+                <button type="submit" disabled={status !== 'CONNECTED' || !input} className="p-3 md:p-4 bg-indigo-600 text-white rounded-xl shadow-indigo-500/20 shadow-lg active:scale-95 transition-all">
+                  <Send size={18} />
                 </button>
               </div>
             </form>
@@ -989,110 +1308,70 @@ export default function SpecterTerminal() {
   );
 }
 
-// Success Handshake Overlay
-function HandshakeOverlay() {
+function HandshakeOverlay({ type }) {
+  const isError = type === 'error';
   return (
     <motion.div 
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      transition={{ duration: 0.3 }}
-      className="fixed inset-0 z-[100] bg-[#030712]/40 backdrop-blur-xl flex flex-col items-center justify-center pointer-events-none p-4"
+      className={`fixed inset-0 z-[100] ${isError ? 'bg-rose-950/40' : 'bg-[#030712]/40'} backdrop-blur-xl flex flex-col items-center justify-center pointer-events-none p-4`}
     >
       <motion.div 
         initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
         transition={{ type: "spring", damping: 15, stiffness: 200 }}
-        className="relative z-10 flex flex-col items-center gap-4 md:gap-6"
+        className="flex flex-col items-center gap-4 text-center"
       >
-        <div className="p-4 md:p-6 bg-indigo-500/20 rounded-full border border-indigo-400/50 shadow-[0_0_50px_rgba(99,102,241,0.3)]">
-          <CheckCircle2 className="w-10 h-10 md:w-16 md:h-16 text-emerald-400" />
+        <div className={`p-4 md:p-6 rounded-full border shadow-2xl ${isError ? 'bg-rose-500/20 border-rose-500/50' : 'bg-indigo-500/20 border-indigo-400/50'}`}>
+          {isError ? <ShieldAlert size={48} className="text-rose-500" /> : <CheckCircle2 size={48} className="text-emerald-400" />}
         </div>
-        <div className="text-center px-4">
-          <h2 className="text-lg md:text-2xl font-black uppercase tracking-[0.2em] md:tracking-[0.4em] text-white">Bridge_Established</h2>
-          <p className="text-indigo-400 text-[8px] md:text-[10px] font-bold tracking-[0.1em] md:tracking-[0.2em] mt-2 uppercase">Zero-Knowledge Key Sync Complete</p>
+        <div>
+          <h2 className="text-lg md:text-xl font-black uppercase tracking-widest text-white">
+            {isError ? 'Handshake_Failed' : 'Bridge_Established'}
+          </h2>
+          <p className={`text-[10px] uppercase mt-1 font-bold ${isError ? 'text-rose-400' : 'text-indigo-400'}`}>
+            {isError ? 'Node Offline or Invalid Identity' : 'Zero-Knowledge Key Sync Complete'}
+          </p>
         </div>
       </motion.div>
     </motion.div>
   );
 }
 
-// NEW Error Handshake Overlay
-function ErrorOverlay() {
-    return (
-      <motion.div 
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        transition={{ duration: 0.3 }}
-        className="fixed inset-0 z-[100] bg-rose-950/20 backdrop-blur-xl flex flex-col items-center justify-center pointer-events-none p-4"
-      >
-        <motion.div 
-          initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", damping: 15, stiffness: 200 }}
-          className="relative z-10 flex flex-col items-center gap-4 md:gap-6"
-        >
-          <div className="p-4 md:p-6 bg-rose-500/20 rounded-full border border-rose-500/50 shadow-[0_0_50px_rgba(244,63,94,0.3)]">
-            <ShieldAlert className="w-10 h-10 md:w-16 md:h-16 text-rose-500" />
-          </div>
-          <div className="text-center px-4">
-            <h2 className="text-lg md:text-2xl font-black uppercase tracking-[0.2em] md:tracking-[0.4em] text-white text-rose-50">Handshake_Failed</h2>
-            <p className="text-rose-400 text-[8px] md:text-[10px] font-bold tracking-[0.1em] md:tracking-[0.2em] mt-2 uppercase">Node Offline or Identity Invalid</p>
-          </div>
-        </motion.div>
-      </motion.div>
-    );
-  }
-
 function ParticleBackground() {
   const canvasRef = useRef(null);
-
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     let particles = [];
-    
-    const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
-
+    const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
     class Particle {
       constructor() { this.reset(); }
       reset() {
         this.x = Math.random() * canvas.width;
         this.y = Math.random() * canvas.height;
-        this.vx = (Math.random() - 0.5) * 0.4;
-        this.vy = (Math.random() - 0.5) * 0.4;
-        this.size = Math.random() * (window.innerWidth < 768 ? 1.2 : 2.0);
+        this.vx = (Math.random() - 0.5) * 0.3;
+        this.vy = (Math.random() - 0.5) * 0.3;
+        this.size = Math.random() * 1.5 + 0.5;
       }
       update() {
-        this.x += this.vx;
-        this.y += this.vy;
-        if (this.x < 0) this.x = canvas.width;
-        if (this.x > canvas.width) this.x = 0;
-        if (this.y < 0) this.y = canvas.height;
-        if (this.y > canvas.height) this.y = 0;
+        this.x += this.vx; this.y += this.vy;
+        if (this.x < 0) this.x = canvas.width; if (this.x > canvas.width) this.x = 0;
+        if (this.y < 0) this.y = canvas.height; if (this.y > canvas.height) this.y = 0;
       }
       draw() {
-        ctx.fillStyle = 'rgba(99, 102, 241, 0.15)';
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillStyle = 'rgba(99, 102, 241, 0.15)'; ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
       }
     }
-
-    const init = () => { 
-      const count = window.innerWidth < 768 ? 20 : 45;
-      particles = Array.from({ length: count }, () => new Particle()); 
-    };
-
+    const init = () => { particles = Array.from({ length: window.innerWidth < 768 ? 25 : 50 }, () => new Particle()); };
     const animate = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       particles.forEach(p => { p.update(); p.draw(); });
       requestAnimationFrame(animate);
     };
-
     window.addEventListener('resize', () => { resize(); init(); });
     resize(); init(); animate();
     return () => window.removeEventListener('resize', resize);
   }, []);
-
   return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none z-0" />;
 }
