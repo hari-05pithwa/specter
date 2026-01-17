@@ -10,16 +10,33 @@
   --color-foreground: var(--foreground);
 }
 
-body {
-  @apply bg-[#030712] text-slate-200 overflow-hidden;
-  /* Deep radial glow in the corner for modern depth */
-  background: radial-gradient(circle at top right, #1e1b4b, #030712);
-  font-family: var(--font-sans);
+/* 1. Fix the Root Scroll */
+html, body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden !important; /* Strictly disable browser-level scrolling */
+  position: fixed; /* Prevents "rubber-banding" on iOS */
 }
 
-/* Frosted glass utility */
+body {
+  @apply bg-[#030712] text-slate-200;
+  background: radial-gradient(circle at top right, #1e1b4b, #030712);
+  font-family: var(--font-sans);
+  /* Uses svh to account for mobile address bars */
+  height: 100svh; 
+}
+
+/* 2. Frosted glass utility */
 .glass-panel {
   @apply bg-white/5 backdrop-blur-2xl border border-white/10 shadow-2xl;
+}
+
+/* 3. Improve Scrollbar behavior */
+.custom-scrollbar {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch; /* Ensures smooth momentum scrolling on iOS */
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -30,18 +47,11 @@ body {
   @apply bg-indigo-500/30 rounded-full;
 }
 
-@layer base {
-  body {
-    @apply bg-[#030712] text-slate-200 overflow-hidden;
-    background: radial-gradient(circle at top right, #1e1b4b, #030712);
-  }
-}
-
-.glass-panel {
-  @apply bg-white/5 backdrop-blur-2xl border border-white/10 shadow-2xl;
-}
-
 /* Particle Canvas Container */
 .particle-container {
   mask-image: radial-gradient(circle, white, transparent);
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
 }
