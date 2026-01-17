@@ -1099,11 +1099,10 @@
 
 
 
-
 "use client";
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ShieldCheck, Send, Paperclip, Fingerprint, Menu, X, Lock, Cpu, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { ShieldCheck, Send, Paperclip, Fingerprint, Menu, X, Lock, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { useSpecterStore } from '../hooks/useSpecterStore';
 import WebRTCManager from '../lib/WebRTCManager';
 import { encryptData, decryptData, generateSharedKey, exportKey, importKey, encryptFile, decryptFile } from '../lib/crypto';
@@ -1155,7 +1154,7 @@ export default function SpecterTerminal() {
           try {
             const decrypted = await decryptData(data, currentKey);
             addMessage({ text: decrypted, sender: 'peer', timestamp: Date.now() });
-          } catch (e) { addLog("SEC_ERROR: Integrity Failure."); }
+          } catch (e) { addLog("SEC_ERROR: Decryption Integrity Failure."); }
         }
       });
       rtc.current.init(myIdRef.current);
@@ -1211,7 +1210,8 @@ export default function SpecterTerminal() {
   };
 
   return (
-    <main className="h-screen w-full bg-[#030712] overflow-hidden relative flex flex-col items-center justify-center p-0 sm:p-4 md:p-8">
+    /* FIXED MAIN WRAPPER: svh is key for mobile address bar fixes */
+    <main className="fixed inset-0 w-full h-[100svh] bg-[#030712] flex flex-col items-center justify-center p-0 sm:p-4 overflow-hidden">
       <ParticleBackground />
 
       <AnimatePresence>
@@ -1220,83 +1220,79 @@ export default function SpecterTerminal() {
       </AnimatePresence>
 
       <motion.div 
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
         className="w-full h-full max-w-6xl glass-panel rounded-none sm:rounded-3xl flex flex-col overflow-hidden relative shadow-2xl z-10"
       >
-        {/* RESPONSIVE HEADER */}
-        <header className="w-full flex-none px-4 py-3 md:px-6 border-b border-white/10 flex justify-between items-center bg-white/5 backdrop-blur-md z-50">
+        {/* HEADER: flex-none ensures it never shrinks or hides */}
+        <header className="flex-none h-14 md:h-16 px-4 border-b border-white/10 flex justify-between items-center bg-white/5 backdrop-blur-md z-50">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-indigo-500/20 rounded-lg">
-              <ShieldCheck className="w-5 h-5 text-indigo-400" />
-            </div>
-            <div className="hidden xs:block">
-              <h1 className="text-sm font-bold text-white tracking-tight leading-none uppercase">Specter</h1>
-            </div>
+            <ShieldCheck className="w-5 h-5 text-indigo-400" />
+            <h1 className="text-xs font-bold text-white tracking-widest uppercase hidden xs:block">Specter</h1>
           </div>
 
-          {/* NODE ID DISPLAY (CRITICAL FOR MOBILE) */}
-          <div className="flex items-center gap-2 flex-1 justify-center sm:justify-end mr-2 sm:mr-4">
-             <div className="flex items-center gap-1.5 px-2 py-1 md:px-3 md:py-1.5 bg-indigo-500/10 rounded-lg border border-indigo-500/20 text-indigo-100 shadow-inner">
-                <Fingerprint className="w-3.5 h-3.5 text-indigo-400 hidden sm:block" />
-                <span className="text-[10px] md:text-xs font-mono font-bold tracking-widest">{myIdRef.current}</span>
+          {/* CENTERED ID BADGE FOR QUICK VISIBILITY */}
+          <div className="flex items-center gap-2">
+             <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-500/10 rounded-lg border border-indigo-500/20 text-indigo-100 shadow-inner">
+                <Fingerprint size={14} className="text-indigo-400" />
+                <span className="text-[10px] font-mono font-bold">{myIdRef.current}</span>
              </div>
-             
-             <div className="flex items-center gap-1.5 px-2 py-1 md:px-3 md:py-1.5 bg-black/40 rounded-full border border-white/5">
+             <div className="flex items-center gap-1 px-2 py-1 bg-black/40 rounded-full border border-white/5">
                 <span className={`w-1.5 h-1.5 rounded-full ${status === 'CONNECTED' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
-                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-300 hidden md:inline">{status}</span>
+                <span className="text-[9px] font-bold uppercase text-slate-300 hidden sm:inline">{status}</span>
              </div>
           </div>
           
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-white/10 rounded-lg text-white transition-colors">
+          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 text-white">
             {isSidebarOpen ? <X size={20}/> : <Menu size={20}/>}
           </button>
         </header>
 
         <div className="flex-grow flex overflow-hidden relative">
-          {/* SIDEBAR OVERLAY FOR MOBILE */}
+          {/* SIDEBAR OVERLAY */}
           <aside className={`
             absolute md:relative z-40 h-full w-72 border-r border-white/10 bg-[#030712]/95 md:bg-transparent backdrop-blur-xl 
             transition-transform duration-300 ease-in-out flex flex-col
             ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
           `}>
-            <div className="p-6 flex flex-col h-full space-y-4">
-              <label className="text-[10px] text-slate-500 uppercase font-black tracking-widest opacity-50">Security Feed</label>
-              <div className="flex-grow overflow-hidden">
-                <TerminalLog logs={logs} />
-              </div>
+            <div className="p-6 flex flex-col h-full overflow-hidden">
+              <label className="text-[10px] text-slate-500 uppercase font-black tracking-widest opacity-50 mb-4">Security Logs</label>
+              <TerminalLog logs={logs} />
             </div>
           </aside>
 
-          {/* CHAT AREA */}
-          <div className="flex-grow flex flex-col bg-black/20 relative min-w-0">
+          {/* CHAT CONTAINER: Locked height, scrolling only in the middle */}
+          <div className="flex-grow flex flex-col bg-black/10 relative min-w-0 overflow-hidden">
             {status !== 'CONNECTED' && (
               <ConnectionPanel targetId={targetId} setTargetId={setTargetId} onConnect={handleConnect} disabled={isConnecting} />
             )}
             
-            <div className="flex-grow overflow-y-auto p-4 md:p-8 space-y-6 custom-scrollbar">
+            {/* SCROLLABLE CHAT AREA */}
+            <div className="flex-grow overflow-y-auto p-4 md:p-8 space-y-6 custom-scrollbar scroll-smooth">
               <AnimatePresence mode="popLayout">
                 {messages.length === 0 && status === 'CONNECTED' && (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center h-full opacity-20 gap-3 text-white">
                     <Lock size={40} />
-                    <span className="text-xs uppercase tracking-[0.2em]">Encrypted Tunnel Established</span>
+                    <span className="text-xs uppercase tracking-[0.2em]">Secure Data Channel Active</span>
                   </motion.div>
                 )}
                 {messages.map((msg) => <ChatBubble key={msg.timestamp} msg={msg} />)}
               </AnimatePresence>
             </div>
 
-            {/* INPUT BAR */}
-            <form onSubmit={handleSendMessage} className="p-3 md:p-6 bg-white/5 border-t border-white/10 flex-none backdrop-blur-md">
+            {/* INPUT BAR: flex-none locks it to the bottom */}
+            <form onSubmit={handleSendMessage} className="flex-none p-3 md:p-6 bg-white/5 border-t border-white/10 backdrop-blur-md">
               <div className="max-w-4xl mx-auto flex gap-2 md:gap-3 items-center">
                 <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileDrop} />
-                <button type="button" onClick={() => fileInputRef.current.click()} className="p-2 md:p-3 text-slate-400 hover:text-indigo-400 transition-colors" disabled={status !== 'CONNECTED'}><Paperclip size={20} /></button>
+                <button type="button" onClick={() => fileInputRef.current.click()} className="p-2.5 text-slate-400 hover:text-indigo-400" disabled={status !== 'CONNECTED'}>
+                  <Paperclip size={20} />
+                </button>
                 <input 
-                  className="flex-grow bg-black/40 border border-white/10 rounded-xl px-4 py-3 md:px-5 md:py-4 outline-none focus:border-indigo-500/50 text-white text-sm" 
-                  placeholder={status === 'CONNECTED' ? "Type message..." : "Waiting..."} 
+                  className="flex-grow bg-black/40 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-indigo-500/50 text-white text-sm" 
+                  placeholder={status === 'CONNECTED' ? "Type message..." : "Handshake required..."} 
                   value={input} onChange={(e) => setInput(e.target.value)} disabled={status !== 'CONNECTED'} 
                 />
-                <button type="submit" disabled={status !== 'CONNECTED' || !input} className="p-3 md:p-4 bg-indigo-600 text-white rounded-xl shadow-indigo-500/20 shadow-lg active:scale-95 transition-all">
+                <button type="submit" disabled={status !== 'CONNECTED' || !input} className="p-3 bg-indigo-600 text-white rounded-xl shadow-lg active:scale-95 transition-all">
                   <Send size={18} />
                 </button>
               </div>
@@ -1313,14 +1309,14 @@ function HandshakeOverlay({ type }) {
   return (
     <motion.div 
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className={`fixed inset-0 z-[100] ${isError ? 'bg-rose-950/40' : 'bg-[#030712]/40'} backdrop-blur-xl flex flex-col items-center justify-center pointer-events-none p-4`}
+      className={`fixed inset-0 z-[100] ${isError ? 'bg-rose-950/60' : 'bg-[#030712]/60'} backdrop-blur-xl flex flex-col items-center justify-center pointer-events-none p-4`}
     >
       <motion.div 
         initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
         transition={{ type: "spring", damping: 15, stiffness: 200 }}
         className="flex flex-col items-center gap-4 text-center"
       >
-        <div className={`p-4 md:p-6 rounded-full border shadow-2xl ${isError ? 'bg-rose-500/20 border-rose-500/50' : 'bg-indigo-500/20 border-indigo-400/50'}`}>
+        <div className={`p-4 rounded-full border shadow-2xl ${isError ? 'bg-rose-500/20 border-rose-500/50' : 'bg-indigo-500/20 border-indigo-400/50'}`}>
           {isError ? <ShieldAlert size={48} className="text-rose-500" /> : <CheckCircle2 size={48} className="text-emerald-400" />}
         </div>
         <div>
@@ -1328,7 +1324,7 @@ function HandshakeOverlay({ type }) {
             {isError ? 'Handshake_Failed' : 'Bridge_Established'}
           </h2>
           <p className={`text-[10px] uppercase mt-1 font-bold ${isError ? 'text-rose-400' : 'text-indigo-400'}`}>
-            {isError ? 'Node Offline or Invalid Identity' : 'Zero-Knowledge Key Sync Complete'}
+            {isError ? 'Node Offline or Invalid ID' : 'Key Sync Complete'}
           </p>
         </div>
       </motion.div>
@@ -1349,8 +1345,8 @@ function ParticleBackground() {
       reset() {
         this.x = Math.random() * canvas.width;
         this.y = Math.random() * canvas.height;
-        this.vx = (Math.random() - 0.5) * 0.3;
-        this.vy = (Math.random() - 0.5) * 0.3;
+        this.vx = (Math.random() - 0.5) * 0.2;
+        this.vy = (Math.random() - 0.5) * 0.2;
         this.size = Math.random() * 1.5 + 0.5;
       }
       update() {
@@ -1359,11 +1355,11 @@ function ParticleBackground() {
         if (this.y < 0) this.y = canvas.height; if (this.y > canvas.height) this.y = 0;
       }
       draw() {
-        ctx.fillStyle = 'rgba(99, 102, 241, 0.15)'; ctx.beginPath();
+        ctx.fillStyle = 'rgba(99, 102, 241, 0.1)'; ctx.beginPath();
         ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
       }
     }
-    const init = () => { particles = Array.from({ length: window.innerWidth < 768 ? 25 : 50 }, () => new Particle()); };
+    const init = () => { particles = Array.from({ length: 30 }, () => new Particle()); };
     const animate = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       particles.forEach(p => { p.update(); p.draw(); });
